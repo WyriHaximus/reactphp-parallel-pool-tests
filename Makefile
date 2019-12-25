@@ -1,47 +1,36 @@
-all:
-	composer run-script qa-all --timeout=0
+# set all to phony
+SHELL=bash
 
-all-extended:
-	composer run-script qa-all-extended --timeout=0
+.PHONY: *
 
-ci:
-	composer run-script qa-ci --timeout=0
+ifneq ("$(wildcard /.dockerenv)","")
+    DOCKER_RUN=
+else
+	DOCKER_RUN=docker run --rm -it \
+		-v `pwd`:`pwd` \
+		-w `pwd` \
+		"wyrihaximusnet/php:7.4-zts-alpine3.10-dev"
+endif
 
-ci-extended:
-	composer run-script qa-ci-extended --timeout=0
-
-ci-windows:
-	composer run-script qa-ci-windows --timeout=0
-
-contrib:
-	composer run-script qa-contrib --timeout=0
-
-cs:
-	composer cs
-
-cs-fix:
-	composer cs-fix
-
-unit:
-	composer run-script unit --timeout=0
+all: lint cs-fix cs stan psalm composer-require-checker composer-unused
 
 lint:
-	composer run-script lint --timeout=0
+	$(DOCKER_RUN) vendor/bin/parallel-lint --exclude vendor .
+
+cs:
+	$(DOCKER_RUN) vendor/bin/phpcs --parallel=$(nproc)
+
+cs-fix:
+	$(DOCKER_RUN) vendor/bin/phpcbf --parallel=$(nproc)
 
 stan:
-	composer run-script stan --timeout=0
+	$(DOCKER_RUN) vendor/bin/phpstan analyse src --level max --ansi -c phpstan.neon
 
 psalm:
-	composer run-script psalm --timeout=0
+	$(DOCKER_RUN) vendor/bin/psalm --threads=$(nproc)
 
 composer-require-checker:
-	composer run-script composer-require-checker --timeout=0
+	$(DOCKER_RUN) vendor/bin/composer-require-checker --ignore-parse-errors --ansi -vvv
 
 composer-unused:
-	composer unused
-
-unit-coverage:
-	composer run-script unit-coverage --timeout=0
-
-ci-coverage:
-	composer ci-coverage
+	$(DOCKER_RUN) composer unused --ansi

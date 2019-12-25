@@ -8,7 +8,7 @@ jobs:
   composer-install:
     strategy:
       matrix:
-        php: [7.3, 7.4]
+        php: [7.4]
         composer: [lowest, current, highest]
     runs-on: ubuntu-latest
     container:
@@ -16,7 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: Cache composer packages
-        uses: actions/cache@v1.0.1
+        uses: actions/cache@v1
         with:
           path: ./vendor/
           key: ${{ matrix.composer }}-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}
@@ -32,7 +32,7 @@ jobs:
   qa:
     strategy:
       matrix:
-        php: [7.3, 7.4]
+        php: [7.4]
         composer: [lowest, current, highest]
         qa: [lint, cs, stan, psalm, composer-require-checker, composer-unused]
     needs: composer-install
@@ -42,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - name: Cache composer packages
-        uses: actions/cache@v1.0.1
+        uses: actions/cache@v1
         with:
           path: ./vendor/
           key: ${{ matrix.composer }}-${{ matrix.php }}-${{ hashFiles('**/composer.lock') }}

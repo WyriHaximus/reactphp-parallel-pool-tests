@@ -7,18 +7,23 @@ use Money\Money;
 use parallel\Future\Error\Killed;
 use React\EventLoop\Factory;
 use React\EventLoop\LoopInterface;
-use WyriHaximus\React\Parallel\ClosedException;
-use function React\Promise\all;
+use UnexpectedValueException;
 use WyriHaximus\AsyncTestUtilities\AsyncTestCase;
+use WyriHaximus\React\Parallel\ClosedException;
 use WyriHaximus\React\Parallel\PoolInterface;
+use function range;
+use function React\Promise\all;
 use function Safe\sleep;
 
 abstract class AbstractPoolTest extends AsyncTestCase
 {
-    public function provideCallablesAndTheirExpectedResults(): iterable
+    /**
+     * @return iterable<mixed>
+     */
+    final public function provideCallablesAndTheirExpectedResults(): iterable
     {
         yield 'math' => [
-            function (int ...$ints) {
+            static function (int ...$ints): int {
                 $result = 0;
 
                 foreach ($ints as $int) {
@@ -36,7 +41,7 @@ abstract class AbstractPoolTest extends AsyncTestCase
         ];
 
         yield 'money-same-currency' => [
-            function (Money $euro, Money $usd) {
+            static function (Money $euro, Money $usd): bool {
                 return $euro->isSameCurrency($usd);
             },
             [
@@ -47,14 +52,14 @@ abstract class AbstractPoolTest extends AsyncTestCase
         ];
 
         yield 'money-add' => [
-            function (Money ...$euros) {
+            static function (Money ...$euros): int {
                 $total = Money::EUR(0);
 
                 foreach ($euros as $euro) {
                     $total = $total->add($euro);
                 }
 
-                return (int)$total->getAmount();
+                return (int) $total->getAmount();
             },
             [
                 Money::EUR(512),
@@ -64,7 +69,7 @@ abstract class AbstractPoolTest extends AsyncTestCase
         ];
 
         yield 'sleep' => [
-            function () {
+            static function (): bool {
                 sleep(1);
 
                 return true;
@@ -75,39 +80,42 @@ abstract class AbstractPoolTest extends AsyncTestCase
     }
 
     /**
-     * @dataProvider provideCallablesAndTheirExpectedResults
      * @param mixed[] $args
-     * @param mixed $expectedResult
+     * @param mixed   $expectedResult
+     *
+     * @dataProvider provideCallablesAndTheirExpectedResults
      */
-    public function testFullRunThrough(Closure $callable, array $args, $expectedResult): void
+    final public function testFullRunThrough(Closure $callable, array $args, $expectedResult): void
     {
         $loop = Factory::create();
         $pool = $this->createPool($loop);
 
         /** @psalm-suppress UndefinedInterfaceMethod */
-        $promise = $pool->run($callable, $args)->always(function () use ($pool): void {
+        $promise = $pool->run($callable, $args)->always(static function () use ($pool): void {
             $pool->close();
         });
-        $result = $this->await($promise, $loop);
+        $result  = $this->await($promise, $loop);
 
         self::assertSame($expectedResult, $result);
     }
 
     /**
-     * @dataProvider provideCallablesAndTheirExpectedResults
      * @param mixed[] $args
-     * @param mixed $expectedResult
+     * @param mixed   $expectedResult
+     *
+     * @dataProvider provideCallablesAndTheirExpectedResults
      */
-    public function testFullRunThroughMultipleConsecutiveCalls(Closure $callable, array $args, $expectedResult): void
+    final public function testFullRunThroughMultipleConsecutiveCalls(Closure $callable, array $args, $expectedResult): void
     {
         $loop = Factory::create();
         $pool = $this->createPool($loop);
 
         $promises = [];
-        foreach (\range(0, 8) as $i) {
+        foreach (range(0, 8) as $i) {
             $promises[$i] = $pool->run($callable, $args);
         }
-        $results = $this->await(all($promises)->always(function () use ($pool): void {
+
+        $results = $this->await(all($promises)->always(static function () use ($pool): void {
             $pool->close();
         }), $loop);
 
@@ -117,11 +125,12 @@ abstract class AbstractPoolTest extends AsyncTestCase
     }
 
     /**
-     * @dataProvider provideCallablesAndTheirExpectedResults
      * @param mixed[] $args
-     * @param mixed $expectedResult
+     * @param mixed   $expectedResult
+     *
+     * @dataProvider provideCallablesAndTheirExpectedResults
      */
-    public function testClosedPoolShouldNotRunClosures(Closure $callable, array $args, $expectedResult): void
+    final public function testClosedPoolShouldNotRunClosures(Closure $callable, array $args, $expectedResult): void
     {
         self::expectException(ClosedException::class);
 
@@ -132,24 +141,24 @@ abstract class AbstractPoolTest extends AsyncTestCase
         $this->await($pool->run($callable, $args), $loop);
     }
 
-    public function testKillingPoolWhileRunningClosuresShouldNotYieldValidResult(): void
+    final public function testKillingPoolWhileRunningClosuresShouldNotYieldValidResult(): void
     {
         self::expectException(Killed::class);
 
         $loop = Factory::create();
         $pool = $this->createPool($loop);
 
-        $loop->futureTick(function () use ($pool) {
+        $loop->futureTick(static function () use ($pool): void {
             $pool->kill();
         });
 
         try {
-            $this->await($pool->run(function () {
+            $this->await($pool->run(static function (): int {
                 sleep(1);
 
                 return 123;
             }), $loop);
-        } catch (\UnexpectedValueException $unexpectedValueException) {
+        } catch (UnexpectedValueException $unexpectedValueException) {
             /** @psalm-suppress InvalidThrow */
             throw $unexpectedValueException->getPrevious();
         }
